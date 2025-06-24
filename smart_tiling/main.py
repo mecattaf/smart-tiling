@@ -28,9 +28,31 @@ except ImportError:
 
 # Import smart-tiling modules
 from .core.geometry import switch_splitting
-from .config.parser import load_config
-from .core.rules import rule_engine
-from .core.state import state_manager
+from .core.context import matches_app_context
+
+# Import optional modules that may not exist yet
+try:
+    from .config.parser import load_config
+except ImportError:
+    def load_config(path):
+        """Fallback config loader when parser module not available."""
+        return {} if not path else {}
+
+try:
+    from .core.rules import rule_engine
+except ImportError:
+    class MockRuleEngine:
+        """Mock rule engine when not available."""
+        def load_rules(self, rules): pass
+    rule_engine = MockRuleEngine()
+
+try:
+    from .core.state import state_manager
+except ImportError:
+    class MockStateManager:
+        """Mock state manager when not available."""
+        pass
+    state_manager = MockStateManager()
 
 
 def temp_dir():
@@ -45,6 +67,48 @@ def save_string(string, file_path):
         print(e)
 
 
+def handle_smart_rules(i3, event, config):
+    """
+    Handle smart rule matching and execution.
+    
+    Args:
+        i3: i3ipc connection
+        event: Window event
+        config: Configuration dict
+        
+    Returns:
+        dict: Result with 'handled' flag indicating if rule was applied
+    """
+    try:
+        if not config.get('rules'):
+            return {'handled': False}
+        
+        # Get the container from the event
+        container = event.container
+        if not container:
+            return {'handled': False}
+        
+        # Example smart rule: Detect Kitty terminal with Neovim
+        # This demonstrates how the context detection works
+        if matches_app_context(container, 
+                             app_id_list=['kitty', 'alacritty'], 
+                             title_patterns=['*nvim*', '*vim*']):
+            # For demonstration, we'll log that we detected this case
+            # In a full implementation, this would apply specific rules
+            print(f"Smart rule detected: Terminal with editor (app_id: {container.app_id}, title: {container.name})", file=sys.stderr)
+            
+            # Could apply custom tiling behavior here
+            # For now, return False to fall back to normal tiling
+            return {'handled': False}
+        
+        # No rules matched
+        return {'handled': False}
+        
+    except Exception as e:
+        print(f"Error in smart rule handling: {e}", file=sys.stderr)
+        return {'handled': False}
+
+
 def smart_switch_splitting(i3, e, debug, outputs, workspaces, depth_limit, splitwidth, splitheight, splitratio, config):
     """
     Smart tiling handler with context-aware placement.
@@ -53,12 +117,10 @@ def smart_switch_splitting(i3, e, debug, outputs, workspaces, depth_limit, split
     try:
         # INJECTION POINT: Before geometry decision
         if config and config.get('rules'):
-            # TODO: Implement smart rule matching and execution
-            # For now, we'll add a placeholder that can be expanded
-            # result = handle_smart_rules(i3, e, config)
-            # if result and result.get('handled'):
-            #     return
-            pass
+            # Smart rule matching and execution
+            result = handle_smart_rules(i3, e, config)
+            if result and result.get('handled'):
+                return
         
         # Fall back to original geometry-based logic
         switch_splitting(i3, e, debug, outputs, workspaces, depth_limit, splitwidth, splitheight, splitratio)
