@@ -1,6 +1,6 @@
 /.idea
 /venv
-/autotiling.egg-info/
+/smart_tiling.egg-info/
 /build/
 /dist/
 **/*.DS_Store
