@@ -315,49 +315,163 @@ class RuleEngine:
         except Exception:
             return False
     
-    def execute_rule(self, i3_connection, container, rule_dict: Dict[str, Any]) -> Dict[str, Any]:
+    def execute_rule(self, i3_connection, container, rule_dict: Dict[str, Any], debug: bool = False) -> Dict[str, Any]:
         """Execute a rule's actions on a container.
         
         Args:
             i3_connection: i3ipc connection object
             container: i3ipc container object that matched the rule
             rule_dict: Rule configuration dictionary
+            debug: Enable debug logging
             
         Returns:
             Dict with 'handled' flag and execution results
         """
+        import sys
+        
         try:
             rule = self._parse_rule(rule_dict)
             
-            # Get current workspace
+            if debug:
+                print(f"Executing rule '{rule.name}' with {len(rule.actions)} actions", file=sys.stderr)
+            
+            # Get layout manager
             from ..scroll.layout import create_layout_manager
             layout_manager = create_layout_manager()
             
-            # Create placement rule config for layout manager
-            placement_config = {
-                'name': rule.name,
-                'direction': 'below',  # default
-                'size_ratio': 0.333,   # default
-                'timeout': 15.0        # default
+            # Get process detection functions
+            from .process import get_process_cwd
+            
+            # Results tracking
+            results = {
+                'handled': False,
+                'rule_name': rule.name,
+                'actions_executed': [],
+                'actions_failed': []
             }
             
-            # Extract placement parameters from actions
-            for action in rule.actions:
-                if action.get('action') == 'place':
-                    placement_config['direction'] = action.get('direction', 'below')
-                elif action.get('action') == 'size_ratio':
-                    placement_config['size_ratio'] = action.get('value', 0.333)
+            # Execute actions in order
+            for i, action in enumerate(rule.actions):
+                action_type = action.get('action', 'unknown')
+                action_success = False
+                
+                if debug:
+                    print(f"  Executing action {i+1}/{len(rule.actions)}: {action_type}", file=sys.stderr)
+                
+                try:
+                    if action_type == 'set_mode':
+                        # Execute set_mode action
+                        mode = action.get('mode', 'v')
+                        modifier = action.get('modifier', None)
+                        action_success = layout_manager.set_mode(i3_connection, mode, modifier)
+                        
+                    elif action_type == 'place':
+                        # Execute place action
+                        direction = action.get('direction', 'below')
+                        action_success = layout_manager.place_window(i3_connection, direction)
+                        
+                    elif action_type == 'size_ratio':
+                        # Execute size_ratio action
+                        ratio = action.get('value', 0.333)
+                        direction = self._get_placement_direction_from_actions(rule.actions)
+                        dimension = self._map_direction_to_dimension(direction)
+                        action_success = layout_manager.set_size(i3_connection, dimension, ratio)
+                        
+                    elif action_type == 'inherit_cwd':
+                        # Execute inherit_cwd action
+                        if action.get('enabled', False):
+                            container_pid = getattr(container, 'pid', None)
+                            if container_pid:
+                                cwd = get_process_cwd(container_pid)
+                                if cwd:
+                                    # Store CWD in state for child windows to inherit
+                                    workspace = layout_manager._get_current_workspace(i3_connection)
+                                    if workspace:
+                                        state_manager.store_parent_cwd(workspace, container.id, cwd)
+                                        action_success = True
+                                        if debug:
+                                            print(f"    Stored CWD: {cwd}", file=sys.stderr)
+                                    else:
+                                        if debug:
+                                            print("    Failed to get current workspace for CWD storage", file=sys.stderr)
+                                else:
+                                    if debug:
+                                        print(f"    Failed to get CWD for PID {container_pid}", file=sys.stderr)
+                            else:
+                                if debug:
+                                    print("    Container has no PID for CWD extraction", file=sys.stderr)
+                        else:
+                            action_success = True  # Not enabled, but not an error
+                            
+                    elif action_type == 'preserve_column':
+                        # Execute preserve_column action
+                        if action.get('enabled', False):
+                            success, dimensions = layout_manager.preserve_column_split(i3_connection, container)
+                            if success and dimensions:
+                                # Store dimensions for restoration
+                                workspace = layout_manager._get_current_workspace(i3_connection)
+                                if workspace:
+                                    state_manager.store_preserved_dimensions(workspace, container.id, dimensions)
+                                    action_success = True
+                                    if debug:
+                                        print(f"    Preserved dimensions: {dimensions}", file=sys.stderr)
+                                else:
+                                    if debug:
+                                        print("    Failed to get current workspace for dimension storage", file=sys.stderr)
+                            else:
+                                if debug:
+                                    print("    Failed to preserve column dimensions", file=sys.stderr)
+                        else:
+                            action_success = True  # Not enabled, but not an error
+                            
+                    else:
+                        # Unknown action type
+                        if debug:
+                            print(f"    Unknown action type: {action_type}", file=sys.stderr)
+                        action_success = False
+                    
+                    # Track results
+                    if action_success:
+                        results['actions_executed'].append(action_type)
+                    else:
+                        results['actions_failed'].append(action_type)
+                        
+                except Exception as e:
+                    results['actions_failed'].append(f"{action_type}: {str(e)}")
+                    if debug:
+                        print(f"    Action {action_type} failed: {e}", file=sys.stderr)
             
-            # Execute placement
-            success = layout_manager.execute_child_window_placement(
-                i3_connection, container, placement_config
-            )
+            # Rule is considered handled if at least one action succeeded
+            results['handled'] = len(results['actions_executed']) > 0
             
-            return {'handled': success, 'rule_name': rule.name}
+            if debug:
+                print(f"  Rule execution complete. Handled: {results['handled']}, "
+                      f"Success: {len(results['actions_executed'])}, "
+                      f"Failed: {len(results['actions_failed'])}", file=sys.stderr)
+            
+            return results
             
         except Exception as e:
-            print(f"Error executing rule: {e}")
-            return {'handled': False, 'error': str(e)}
+            if debug:
+                print(f"Error executing rule: {e}", file=sys.stderr)
+            return {'handled': False, 'error': str(e), 'rule_name': rule_dict.get('name', 'unnamed')}
+
+    def _get_placement_direction_from_actions(self, actions: List[Dict[str, Any]]) -> str:
+        """Extract placement direction from actions list."""
+        for action in actions:
+            if action.get('action') == 'place':
+                return action.get('direction', 'below')
+        return 'below'  # default
+
+    def _map_direction_to_dimension(self, direction: str) -> str:
+        """Map placement direction to sizing dimension."""
+        direction_map = {
+            'below': 'v',
+            'above': 'v',
+            'left': 'h', 
+            'right': 'h'
+        }
+        return direction_map.get(direction, 'v')
 
 
 # Global rule engine instance

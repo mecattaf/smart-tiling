@@ -24,16 +24,32 @@ Create the configuration file at `~/.config/smart-tiling/rules.yaml`:
 
 ```yaml
 rules:
-  - name: "editor_terminal"
+  # Complete feature demonstration rule
+  - name: "neovim_terminal_complete"
     parent:
       app_id: ["kitty", "alacritty", "foot"]
-      title_pattern: ["*nvim*", "*vim*", "*emacs*"]
+      title_pattern: ["*nvim*", "*NVIM*"]
+    child:
+      app_id: ["kitty", "alacritty", "foot"]
+    actions:
+      - set_mode: v after
+      - place: below
+      - size_ratio: 0.333
+      - inherit_cwd: true
+      - preserve_column: true
+
+  # Minimal rule for basic testing
+  - name: "editor_terminal_basic"
+    parent:
+      app_id: ["kitty", "alacritty", "foot"]
+      title_pattern: ["*vim*", "*emacs*"]
     child:
       app_id: ["kitty", "alacritty", "foot"]
     actions:
       - place: below
       - size_ratio: 0.333
 
+  # Alternative placement direction
   - name: "browser_devtools"
     parent:
       app_id: ["firefox", "google-chrome", "chromium"]
@@ -41,13 +57,36 @@ rules:
     child:
       app_id: ["kitty", "alacritty", "foot"]
     actions:
+      - set_mode: h after
       - place: right
       - size_ratio: 0.5
+
+  # Different editor configurations
+  - name: "code_terminal"
+    parent:
+      app_id: ["code", "code-oss"]
+      title_pattern: ["*Visual Studio Code*"]
+    child:
+      app_id: ["kitty", "alacritty", "foot"]
+    actions:
+      - set_mode: v after
+      - place: below
+      - size_ratio: 0.4
+      - inherit_cwd: true
 
 settings:
   debug: true
   rule_timeout: 15
 ```
+
+**Configuration Explanation:**
+
+- **`set_mode`**: Pre-sets Scroll's layout mode when parent window gets focus
+- **`place`**: Defines where child window should appear relative to parent
+- **`size_ratio`**: Sets what portion of space the child window occupies
+- **`inherit_cwd`**: Makes child terminal inherit parent's working directory
+- **`preserve_column`**: Maintains column layout structure during placement
+- **`debug: true`**: Enables detailed logging for testing and debugging
 
 ### 3. Configure Scroll
 
@@ -63,6 +102,45 @@ exec_always smart-tiling --config ~/.config/smart-tiling/rules.yaml --debug
 # Reload Scroll configuration
 scrollctl reload
 # Or restart Scroll completely
+```
+
+## Smart-Tiling Event-Driven Workflow
+
+Smart-tiling now uses a sophisticated event-driven approach that provides seamless integration:
+
+### How It Works
+
+1. **Parent Focus Event**: When you focus on an application that matches a rule's parent criteria (e.g., Neovim):
+   - Smart-tiling detects the match and logs: `"Parent focus matched rule: <rule_name>"`
+   - `set_mode` actions are **pre-executed immediately** to prepare the layout
+   - Rule is stored as "pending" for the workspace with a timeout (default 15 seconds)
+
+2. **Child Window Creation**: When a new window is created that matches the rule's child criteria:
+   - Smart-tiling checks for pending rules and logs: `"New window matched pending rule: <rule_name>"`
+   - Remaining actions (`place`, `size_ratio`, etc.) are executed in sequence
+   - Actions are tracked with detailed success/failure logging
+
+3. **Action Execution Order**:
+   - **Focus Event**: `set_mode` → store as pending
+   - **New Window Event**: `place` → `size_ratio` → `inherit_cwd` → `preserve_column`
+
+### Debug Output Examples
+
+When testing with `debug: true`, you should see output like:
+
+```
+Parent focus matched rule: neovim_terminal_complete (app_id: kitty, title: nvim test.py)
+  Pre-executing set_mode: v after
+Stored pending rule: neovim_terminal_complete for workspace: 1
+
+New window matched pending rule: neovim_terminal_complete (app_id: kitty)
+  Executing child action: place
+  Executing child action: size_ratio
+  Executing child action: inherit_cwd
+    Child can inherit CWD: /home/user/project
+  Executing child action: preserve_column
+    Preserved dimensions available: {'width': 800, 'height': 600, ...}
+  Child actions complete. Handled: True, Success: 4, Failed: 0
 ```
 
 ## Primary Workflow Tests

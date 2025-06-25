@@ -240,14 +240,22 @@ class TestScrollLayoutManager(unittest.TestCase):
         self.assertEqual(dimensions.get('parent_width', 0), 0)
         
     @patch('smart_tiling.scroll.layout.state_manager')
-    def test_execute_neovim_terminal_placement(self, mock_state_manager):
-        """Test the primary use case: Neovim terminal placement."""
+    def test_execute_child_window_placement(self, mock_state_manager):
+        """Test the primary use case: child window placement."""
         self.mock_i3.command.return_value = self.mock_success_result
+        
+        # Create placement rule config
+        placement_rule = {
+            'name': 'test_rule',
+            'direction': 'below',
+            'size_ratio': 0.333,
+            'timeout': 15.0
+        }
         
         # Mock workspace detection
         with patch.object(self.layout_manager, '_get_current_workspace', return_value='workspace1'):
-            result = self.layout_manager.execute_neovim_terminal_placement(
-                self.mock_i3, self.mock_container, 0.333
+            result = self.layout_manager.execute_child_window_placement(
+                self.mock_i3, self.mock_container, placement_rule
             )
         
         self.assertTrue(result)
@@ -270,13 +278,13 @@ class TestScrollLayoutManager(unittest.TestCase):
         mock_state_manager.store_pending_rule.assert_called_once()
         
     @patch('smart_tiling.scroll.layout.state_manager')
-    def test_apply_terminal_sizing(self, mock_state_manager):
-        """Test applying terminal sizing after creation."""
+    def test_apply_child_window_sizing(self, mock_state_manager):
+        """Test applying child window sizing after creation."""
         # Mock pending rule
         mock_pending_rule = {
-            'rule': {'type': 'neovim_terminal', 'size_ratio': 0.333},
+            'rule': {'type': 'child_placement', 'direction': 'below', 'size_ratio': 0.333},
             'parent_id': 12345,
-            'context': {'neovim_container_id': 12345}
+            'context': {'parent_container_id': 12345}
         }
         mock_state_manager.get_pending_rule.return_value = mock_pending_rule
         
@@ -284,7 +292,7 @@ class TestScrollLayoutManager(unittest.TestCase):
         
         with patch.object(self.layout_manager, '_get_current_workspace', return_value='workspace1'):
             with patch.object(self.layout_manager, 'restore_original_mode', return_value=True):
-                result = self.layout_manager.apply_terminal_sizing(
+                result = self.layout_manager.apply_child_window_sizing(
                     self.mock_i3, self.mock_container
                 )
         
@@ -294,12 +302,12 @@ class TestScrollLayoutManager(unittest.TestCase):
         self.mock_i3.command.assert_called_with('set_size v 0.333')
         
     @patch('smart_tiling.scroll.layout.state_manager')
-    def test_apply_terminal_sizing_no_pending_rule(self, mock_state_manager):
-        """Test applying terminal sizing when no pending rule exists."""
+    def test_apply_child_window_sizing_no_pending_rule(self, mock_state_manager):
+        """Test applying child window sizing when no pending rule exists."""
         mock_state_manager.get_pending_rule.return_value = None
         
         with patch.object(self.layout_manager, '_get_current_workspace', return_value='workspace1'):
-            result = self.layout_manager.apply_terminal_sizing(
+            result = self.layout_manager.apply_child_window_sizing(
                 self.mock_i3, self.mock_container
             )
         
@@ -437,17 +445,17 @@ class TestIntegrationScenarios(unittest.TestCase):
         self.mock_i3 = Mock()
         self.mock_i3.command.return_value = [Mock(success=True)]
         
-    def test_neovim_terminal_complete_workflow(self):
-        """Test complete Neovim→Terminal workflow."""
-        # Create mock Neovim container
-        neovim_container = Mock()
-        neovim_container.id = 12345
-        neovim_container.parent = Mock()
-        neovim_container.parent.id = 67890
+    def test_child_window_complete_workflow(self):
+        """Test complete parent→child window workflow."""
+        # Create mock parent container
+        parent_container = Mock()
+        parent_container.id = 12345
+        parent_container.parent = Mock()
+        parent_container.parent.id = 67890
         
-        # Create mock terminal container
-        terminal_container = Mock()
-        terminal_container.id = 54321
+        # Create mock child container
+        child_container = Mock()
+        child_container.id = 54321
         
         # Mock workspace
         mock_workspace = Mock()
@@ -458,10 +466,18 @@ class TestIntegrationScenarios(unittest.TestCase):
         mock_tree.find_focused.return_value = mock_focused
         self.mock_i3.get_tree.return_value = mock_tree
         
+        # Create placement rule config
+        placement_rule = {
+            'name': 'test_rule',
+            'direction': 'below',
+            'size_ratio': 0.333,
+            'timeout': 15.0
+        }
+        
         # Step 1: Execute placement
         with patch('smart_tiling.scroll.layout.state_manager') as mock_state_manager:
-            result = self.layout_manager.execute_neovim_terminal_placement(
-                self.mock_i3, neovim_container, 0.333
+            result = self.layout_manager.execute_child_window_placement(
+                self.mock_i3, parent_container, placement_rule
             )
             
             self.assertTrue(result)
@@ -469,16 +485,16 @@ class TestIntegrationScenarios(unittest.TestCase):
             # Verify state was stored
             mock_state_manager.store_pending_rule.assert_called_once()
             
-            # Step 2: Apply terminal sizing
+            # Step 2: Apply child window sizing
             mock_pending_rule = {
-                'rule': {'type': 'neovim_terminal', 'size_ratio': 0.333},
+                'rule': {'type': 'child_placement', 'direction': 'below', 'size_ratio': 0.333},
                 'parent_id': 12345,
-                'context': {'neovim_container_id': 12345}
+                'context': {'parent_container_id': 12345}
             }
             mock_state_manager.get_pending_rule.return_value = mock_pending_rule
             
-            result = self.layout_manager.apply_terminal_sizing(
-                self.mock_i3, terminal_container
+            result = self.layout_manager.apply_child_window_sizing(
+                self.mock_i3, child_container
             )
             
             self.assertTrue(result)
@@ -518,9 +534,16 @@ class TestIntegrationScenarios(unittest.TestCase):
         neovim_container.parent = Mock()
         neovim_container.parent.id = 67890
         
+        placement_rule = {
+            'name': 'test_rule',
+            'direction': 'below', 
+            'size_ratio': 0.333,
+            'timeout': 15.0
+        }
+        
         with patch.object(self.layout_manager, '_get_current_workspace', return_value='workspace1'):
-            result = self.layout_manager.execute_neovim_terminal_placement(
-                self.mock_i3, neovim_container
+            result = self.layout_manager.execute_child_window_placement(
+                self.mock_i3, neovim_container, placement_rule
             )
             
             # Should still succeed despite mark command failure
