@@ -298,6 +298,66 @@ class RuleEngine:
             return rule
         
         return None
+    
+    def matches_rule(self, container, rule_dict: Dict[str, Any]) -> bool:
+        """Check if a container matches a rule definition.
+        
+        Args:
+            container: i3ipc container object
+            rule_dict: Rule configuration dictionary
+            
+        Returns:
+            bool: True if container matches the rule's parent criteria
+        """
+        try:
+            rule = self._parse_rule(rule_dict)
+            return self._matches_parent_criteria(container, rule.parent)
+        except Exception:
+            return False
+    
+    def execute_rule(self, i3_connection, container, rule_dict: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute a rule's actions on a container.
+        
+        Args:
+            i3_connection: i3ipc connection object
+            container: i3ipc container object that matched the rule
+            rule_dict: Rule configuration dictionary
+            
+        Returns:
+            Dict with 'handled' flag and execution results
+        """
+        try:
+            rule = self._parse_rule(rule_dict)
+            
+            # Get current workspace
+            from ..scroll.layout import create_layout_manager
+            layout_manager = create_layout_manager()
+            
+            # Create placement rule config for layout manager
+            placement_config = {
+                'name': rule.name,
+                'direction': 'below',  # default
+                'size_ratio': 0.333,   # default
+                'timeout': 15.0        # default
+            }
+            
+            # Extract placement parameters from actions
+            for action in rule.actions:
+                if action.get('action') == 'place':
+                    placement_config['direction'] = action.get('direction', 'below')
+                elif action.get('action') == 'size_ratio':
+                    placement_config['size_ratio'] = action.get('value', 0.333)
+            
+            # Execute placement
+            success = layout_manager.execute_child_window_placement(
+                i3_connection, container, placement_config
+            )
+            
+            return {'handled': success, 'rule_name': rule.name}
+            
+        except Exception as e:
+            print(f"Error executing rule: {e}")
+            return {'handled': False, 'error': str(e)}
 
 
 # Global rule engine instance

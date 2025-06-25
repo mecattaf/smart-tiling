@@ -88,18 +88,18 @@ def handle_smart_rules(i3, event, config):
         if not container:
             return {'handled': False}
         
-        # Example smart rule: Detect Kitty terminal with Neovim
-        # This demonstrates how the context detection works
-        if matches_app_context(container, 
-                             app_id_list=['kitty', 'alacritty'], 
-                             title_patterns=['*nvim*', '*vim*']):
-            # For demonstration, we'll log that we detected this case
-            # In a full implementation, this would apply specific rules
-            print(f"Smart rule detected: Terminal with editor (app_id: {container.app_id}, title: {container.name})", file=sys.stderr)
-            
-            # Could apply custom tiling behavior here
-            # For now, return False to fall back to normal tiling
-            return {'handled': False}
+        # Apply smart rules from configuration
+        # This delegates to the rule engine for generic rule processing
+        for rule in config.get('rules', []):
+            if rule_engine.matches_rule(container, rule):
+                print(f"Smart rule matched: {rule.get('name', 'unnamed')} (app_id: {container.app_id}, title: {container.name})", file=sys.stderr)
+                
+                # Execute rule actions
+                result = rule_engine.execute_rule(i3, container, rule)
+                if result.get('handled'):
+                    return result
+        
+        # If no rule matched, continue with the generic logic
         
         # No rules matched
         return {'handled': False}
