@@ -12,6 +12,8 @@ from typing import Dict, Any, Optional
 
 import yaml
 
+from .schema import validate_config
+
 
 def parse_yaml_file(path: str) -> Dict[str, Any]:
     """
@@ -53,10 +55,14 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
     Returns:
         Parsed configuration dictionary, or empty dict if no config found
     """
+    config = {}
+    config_source = None
+    
     if path:
         # Use provided path
         try:
-            return parse_yaml_file(path)
+            config = parse_yaml_file(path)
+            config_source = path
         except FileNotFoundError:
             print(f"Config file not found: {path}", file=sys.stderr)
             return {}
@@ -66,24 +72,34 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
         except Exception:
             # Error already printed in parse_yaml_file
             return {}
+    else:
+        # Check default locations
+        default_paths = [
+            Path.home() / ".config" / "smart-tiling" / "rules.yaml",
+            Path.home() / ".config" / "smart-tiling" / "config.yaml",
+            Path("/etc/smart-tiling/config.yaml"),
+        ]
+        
+        for config_path in default_paths:
+            if config_path.exists():
+                try:
+                    config = parse_yaml_file(str(config_path))
+                    config_source = str(config_path)
+                    break
+                except yaml.YAMLError:
+                    # Error already printed in parse_yaml_file, continue to next path
+                    continue
+                except Exception:
+                    # Error already printed in parse_yaml_file, continue to next path
+                    continue
     
-    # Check default locations
-    default_paths = [
-        Path.home() / ".config" / "smart-tiling" / "rules.yaml",
-        Path.home() / ".config" / "smart-tiling" / "config.yaml",
-        Path("/etc/smart-tiling/config.yaml"),
-    ]
+    # Validate configuration if we successfully loaded one
+    if config and config_source:
+        is_valid, validation_errors = validate_config(config)
+        if not is_valid:
+            print(f"Configuration validation warnings for {config_source}:", file=sys.stderr)
+            for error in validation_errors:
+                print(f"  - {error}", file=sys.stderr)
+            print("Configuration loaded with warnings - some features may not work correctly.", file=sys.stderr)
     
-    for config_path in default_paths:
-        if config_path.exists():
-            try:
-                return parse_yaml_file(str(config_path))
-            except yaml.YAMLError:
-                # Error already printed in parse_yaml_file, continue to next path
-                continue
-            except Exception:
-                # Error already printed in parse_yaml_file, continue to next path
-                continue
-    
-    # No config found - not an error for v0.0.1
-    return {}
+    return config
