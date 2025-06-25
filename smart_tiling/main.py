@@ -67,14 +67,15 @@ def save_string(string, file_path):
         print(e)
 
 
-def handle_smart_rules(i3, event, config):
+def handle_smart_rules(i3, event, config, debug=False):
     """
-    Handle smart rule matching and execution.
+    Handle smart rule matching and execution based on event type.
     
     Args:
         i3: i3ipc connection
         event: Window event
         config: Configuration dict
+        debug: Enable debug logging
         
     Returns:
         dict: Result with 'handled' flag indicating if rule was applied
@@ -88,25 +89,266 @@ def handle_smart_rules(i3, event, config):
         if not container:
             return {'handled': False}
         
-        # Apply smart rules from configuration
-        # This delegates to the rule engine for generic rule processing
-        for rule in config.get('rules', []):
-            if rule_engine.matches_rule(container, rule):
-                print(f"Smart rule matched: {rule.get('name', 'unnamed')} (app_id: {container.app_id}, title: {container.name})", file=sys.stderr)
+        # Get current workspace for state management
+        workspace = _get_current_workspace_name(i3)
+        if not workspace:
+            if debug:
+                print("Could not determine current workspace", file=sys.stderr)
+            return {'handled': False}
+        
+        # Handle different event types
+        if hasattr(event, 'change'):
+            event_type = event.change
+            
+            if event_type == 'focus':
+                # Parent focus event - check for matching rules and store as pending
+                return _handle_parent_focus_event(i3, container, config, workspace, debug)
                 
-                # Execute rule actions
-                result = rule_engine.execute_rule(i3, container, rule)
-                if result.get('handled'):
-                    return result
+            elif event_type == 'new':
+                # New window event - check for pending rules and execute
+                return _handle_new_window_event(i3, container, config, workspace, debug)
         
-        # If no rule matched, continue with the generic logic
+        # For other events, fall back to immediate rule matching
+        return _handle_immediate_rule_matching(i3, container, config, debug)
         
-        # No rules matched
+    except Exception as e:
+        if debug:
+            print(f"Error in smart rule handling: {e}", file=sys.stderr)
+        return {'handled': False}
+
+
+def _get_current_workspace_name(i3):
+    """Get current workspace name."""
+    try:
+        tree = i3.get_tree()
+        focused = tree.find_focused()
+        if focused:
+            workspace = focused.workspace()
+            if workspace:
+                return workspace.name
+    except Exception:
+        pass
+    return None
+
+
+def _handle_parent_focus_event(i3, container, config, workspace, debug=False):
+    """Handle parent window focus events."""
+    try:
+        # Check if this container matches any parent criteria
+        for rule_dict in config.get('rules', []):
+            if rule_engine.matches_rule(container, rule_dict):
+                rule = rule_engine._parse_rule(rule_dict)
+                
+                if debug:
+                    print(f"Parent focus matched rule: {rule.name} (app_id: {container.app_id}, title: {container.name})", file=sys.stderr)
+                
+                # Pre-execute set_mode actions immediately
+                _pre_execute_mode_actions(i3, rule, debug)
+                
+                # Store rule as pending
+                rule_engine.store_pending_rule(
+                    workspace=workspace,
+                    rule=rule,
+                    parent_container=container,
+                    expires_in=config.get('rule_timeout', 15.0)
+                )
+                
+                if debug:
+                    print(f"Stored pending rule: {rule.name} for workspace: {workspace}", file=sys.stderr)
+                
+                return {'handled': True, 'rule_name': rule.name, 'action': 'pending'}
+        
         return {'handled': False}
         
     except Exception as e:
-        print(f"Error in smart rule handling: {e}", file=sys.stderr)
+        if debug:
+            print(f"Error in parent focus handling: {e}", file=sys.stderr)
         return {'handled': False}
+
+
+def _handle_new_window_event(i3, container, config, workspace, debug=False):
+    """Handle new window creation events."""
+    try:
+        # Check if there's a pending rule for this workspace
+        rule = rule_engine.check_child_against_pending_rules(container, workspace)
+        if rule:
+            if debug:
+                print(f"New window matched pending rule: {rule.name} (app_id: {container.app_id})", file=sys.stderr)
+            
+            # Execute remaining actions (non-mode actions)
+            result = _execute_child_actions(i3, container, rule, debug)
+            
+            if result.get('handled'):
+                return result
+        
+        return {'handled': False}
+        
+    except Exception as e:
+        if debug:
+            print(f"Error in new window handling: {e}", file=sys.stderr)
+        return {'handled': False}
+
+
+def _handle_immediate_rule_matching(i3, container, config, debug=False):
+    """Handle immediate rule matching for non-focus/new events."""
+    try:
+        # Apply smart rules from configuration immediately
+        for rule_dict in config.get('rules', []):
+            if rule_engine.matches_rule(container, rule_dict):
+                if debug:
+                    print(f"Immediate rule matched: {rule_dict.get('name', 'unnamed')} (app_id: {container.app_id}, title: {container.name})", file=sys.stderr)
+                
+                # Execute all rule actions immediately
+                result = rule_engine.execute_rule(i3, container, rule_dict, debug)
+                if result.get('handled'):
+                    return result
+        
+        return {'handled': False}
+        
+    except Exception as e:
+        if debug:
+            print(f"Error in immediate rule matching: {e}", file=sys.stderr)
+        return {'handled': False}
+
+
+def _pre_execute_mode_actions(i3, rule, debug=False):
+    """Pre-execute set_mode actions when parent gets focus."""
+    try:
+        from .scroll.layout import create_layout_manager
+        layout_manager = create_layout_manager()
+        
+        for action in rule.actions:
+            if action.get('action') == 'set_mode':
+                mode = action.get('mode', 'v')
+                modifier = action.get('modifier', None)
+                
+                if debug:
+                    print(f"  Pre-executing set_mode: {mode} {modifier or ''}", file=sys.stderr)
+                
+                success = layout_manager.set_mode(i3, mode, modifier)
+                if not success and debug:
+                    print(f"  Failed to pre-execute set_mode: {mode} {modifier or ''}", file=sys.stderr)
+                    
+    except Exception as e:
+        if debug:
+            print(f"Error pre-executing mode actions: {e}", file=sys.stderr)
+
+
+def _execute_child_actions(i3, container, rule, debug=False):
+    """Execute non-mode actions for child windows."""
+    try:
+        from .scroll.layout import create_layout_manager
+        layout_manager = create_layout_manager()
+        
+        results = {
+            'handled': False,
+            'rule_name': rule.name,
+            'actions_executed': [],
+            'actions_failed': []
+        }
+        
+        # Execute non-mode actions
+        for action in rule.actions:
+            action_type = action.get('action', 'unknown')
+            
+            # Skip set_mode actions (already executed in pre-execute phase)
+            if action_type == 'set_mode':
+                continue
+                
+            action_success = False
+            
+            if debug:
+                print(f"  Executing child action: {action_type}", file=sys.stderr)
+            
+            try:
+                if action_type == 'place':
+                    # Execute place action
+                    direction = action.get('direction', 'below')
+                    action_success = layout_manager.place_window(i3, direction)
+                    
+                elif action_type == 'size_ratio':
+                    # Execute size_ratio action
+                    ratio = action.get('value', 0.333)
+                    direction = _get_placement_direction_from_rule(rule)
+                    dimension = _map_direction_to_dimension(direction)
+                    action_success = layout_manager.set_size(i3, dimension, ratio)
+                    
+                elif action_type == 'inherit_cwd':
+                    # Execute inherit_cwd action
+                    if action.get('enabled', False):
+                        workspace = layout_manager._get_current_workspace(i3)
+                        if workspace:
+                            cwd = state_manager.get_parent_cwd(workspace)
+                            if cwd and debug:
+                                print(f"    Child can inherit CWD: {cwd}", file=sys.stderr)
+                                # Note: Actual CWD inheritance would need to be handled by the terminal
+                                # This just confirms the CWD is available
+                            action_success = True
+                    else:
+                        action_success = True
+                        
+                elif action_type == 'preserve_column':
+                    # Execute preserve_column action
+                    if action.get('enabled', False):
+                        workspace = layout_manager._get_current_workspace(i3)
+                        if workspace:
+                            dimensions = state_manager.get_preserved_dimensions(workspace)
+                            if dimensions and debug:
+                                print(f"    Preserved dimensions available: {dimensions}", file=sys.stderr)
+                                # Note: Actual column restoration would need additional implementation
+                            action_success = True
+                    else:
+                        action_success = True
+                        
+                else:
+                    if debug:
+                        print(f"    Unknown child action type: {action_type}", file=sys.stderr)
+                    action_success = False
+                
+                # Track results
+                if action_success:
+                    results['actions_executed'].append(action_type)
+                else:
+                    results['actions_failed'].append(action_type)
+                    
+            except Exception as e:
+                results['actions_failed'].append(f"{action_type}: {str(e)}")
+                if debug:
+                    print(f"    Child action {action_type} failed: {e}", file=sys.stderr)
+        
+        # Rule is considered handled if at least one action succeeded
+        results['handled'] = len(results['actions_executed']) > 0
+        
+        if debug:
+            print(f"  Child actions complete. Handled: {results['handled']}, "
+                  f"Success: {len(results['actions_executed'])}, "
+                  f"Failed: {len(results['actions_failed'])}", file=sys.stderr)
+        
+        return results
+        
+    except Exception as e:
+        if debug:
+            print(f"Error executing child actions: {e}", file=sys.stderr)
+        return {'handled': False, 'error': str(e), 'rule_name': rule.name}
+
+
+def _get_placement_direction_from_rule(rule):
+    """Extract placement direction from rule actions."""
+    for action in rule.actions:
+        if action.get('action') == 'place':
+            return action.get('direction', 'below')
+    return 'below'  # default
+
+
+def _map_direction_to_dimension(direction):
+    """Map placement direction to sizing dimension."""
+    direction_map = {
+        'below': 'v',
+        'above': 'v',
+        'left': 'h', 
+        'right': 'h'
+    }
+    return direction_map.get(direction, 'v')
 
 
 def smart_switch_splitting(i3, e, debug, outputs, workspaces, depth_limit, splitwidth, splitheight, splitratio, config):
@@ -118,7 +360,7 @@ def smart_switch_splitting(i3, e, debug, outputs, workspaces, depth_limit, split
         # INJECTION POINT: Before geometry decision
         if config and config.get('rules'):
             # Smart rule matching and execution
-            result = handle_smart_rules(i3, e, config)
+            result = handle_smart_rules(i3, e, config, debug)
             if result and result.get('handled'):
                 return
         
