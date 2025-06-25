@@ -41,10 +41,21 @@ def execute_command_batch(connection, commands: List[str], atomic: bool = True):
     return results
 
 
-def build_neovim_terminal_commands(size_ratio: float = 0.333) -> List[str]:
-    """Build command sequence for Neovim terminal placement."""
+def build_terminal_placement_commands(size_ratio: float = 0.333, direction: str = 'below') -> List[str]:
+    """Build command sequence for terminal placement in specified direction."""
     builder = CommandBuilder()
+    
+    # Map direction to mode
+    direction_map = {
+        'below': ('v', 'after'),
+        'right': ('h', 'after'), 
+        'above': ('v', 'before'),
+        'left': ('h', 'before')
+    }
+    
+    mode, modifier = direction_map.get(direction, ('v', 'after'))
+    
     return (builder
-            .set_mode('v', 'after')
-            .resize('width', f'{int(size_ratio * 100)} ppt')
+            .set_mode(mode, modifier)
+            .resize('width' if mode == 'v' else 'height', f'{int(size_ratio * 100)} ppt')
             .build())

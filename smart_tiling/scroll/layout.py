@@ -235,28 +235,34 @@ class ScrollLayoutManager:
             logger.error(f"Error restoring original mode: {e}", exc_info=True)
             return False
     
-    def execute_neovim_terminal_placement(self, i3_connection, neovim_container, terminal_size_ratio: float = 0.333) -> bool:
+    def execute_child_window_placement(self, i3_connection, parent_container, placement_rule: Dict[str, Any]) -> bool:
         """
-        Execute the primary use case: place terminal below Neovim.
+        Execute child window placement based on rule configuration.
         
         Args:
             i3_connection: i3ipc connection object
-            neovim_container: The Neovim container
-            terminal_size_ratio: Size ratio for terminal (default 0.333 = 1/3)
+            parent_container: The parent container
+            placement_rule: Rule configuration dict with placement parameters
             
         Returns:
             bool: True if placement flow initiated successfully
         """
         try:
-            logger.debug("Starting Neovim→Terminal placement flow")
+            rule_name = placement_rule.get('name', 'unnamed')
+            direction = placement_rule.get('direction', 'below')
+            size_ratio = placement_rule.get('size_ratio', 0.333)
+            timeout = placement_rule.get('timeout', 15.0)
             
-            # Step 1: Set mode to 'v after' 
-            if not self.place_window(i3_connection, 'below'):
-                logger.error("Failed to set vertical after mode")
+            logger.debug(f"Starting child window placement flow for rule: {rule_name}")
+            
+            # Step 1: Set mode based on placement direction
+            if not self.place_window(i3_connection, direction):
+                logger.error(f"Failed to set placement mode for direction: {direction}")
                 return False
             
             # Step 2: Mark parent container for tracking
-            parent = getattr(neovim_container, 'parent', None)
+            parent = getattr(parent_container, 'parent', None)
+            mark_id = None
             if parent:
                 mark_id = f"_smart_parent_{int(time.time())}_{uuid.uuid4().hex[:8]}"
                 mark_command = f"[con_id={parent.id}] mark --add {mark_id}"
@@ -268,28 +274,33 @@ class ScrollLayoutManager:
                 if not success:
                     logger.warning("Failed to mark parent container, continuing anyway")
             
-            # Step 3: Store state for when terminal is created
+            # Step 3: Store state for when child window is created
             workspace = self._get_current_workspace(i3_connection)
             if workspace:
                 state_manager.store_pending_rule(
                     workspace=workspace,
-                    rule={'type': 'neovim_terminal', 'size_ratio': terminal_size_ratio},
-                    parent_id=neovim_container.id,
-                    context={
-                        'neovim_container_id': neovim_container.id,
-                        'mark_id': mark_id if parent else None,
-                        'terminal_size_ratio': terminal_size_ratio
+                    rule={
+                        'type': 'child_placement',
+                        'name': rule_name,
+                        'direction': direction,
+                        'size_ratio': size_ratio
                     },
-                    expires_in=15.0  # Give user 15 seconds to create terminal
+                    parent_id=parent_container.id,
+                    context={
+                        'parent_container_id': parent_container.id,
+                        'mark_id': mark_id,
+                        'placement_rule': placement_rule
+                    },
+                    expires_in=timeout
                 )
                 
-                logger.debug(f"Stored pending rule for workspace {workspace}")
+                logger.debug(f"Stored pending rule for workspace {workspace}: {rule_name}")
             
-            logger.debug("Neovim→Terminal placement flow initiated successfully")
+            logger.debug(f"Child window placement flow initiated successfully for rule: {rule_name}")
             return True
             
         except Exception as e:
-            logger.error(f"Error in Neovim terminal placement: {e}", exc_info=True)
+            logger.error(f"Error in child window placement: {e}", exc_info=True)
             # Always try to restore mode on error
             try:
                 self.restore_original_mode(i3_connection)
@@ -297,13 +308,13 @@ class ScrollLayoutManager:
                 pass  # Don't mask original error
             return False
     
-    def apply_terminal_sizing(self, i3_connection, terminal_container) -> bool:
+    def apply_child_window_sizing(self, i3_connection, child_container) -> bool:
         """
-        Apply size ratio to terminal after it's created.
+        Apply size ratio to child window after it's created.
         
         Args:
             i3_connection: i3ipc connection object  
-            terminal_container: The terminal container that was just created
+            child_container: The child container that was just created
             
         Returns:
             bool: True if sizing applied successfully
@@ -311,36 +322,48 @@ class ScrollLayoutManager:
         try:
             workspace = self._get_current_workspace(i3_connection)
             if not workspace:
-                logger.error("Could not determine workspace for terminal sizing")
+                logger.error("Could not determine workspace for child window sizing")
                 return False
             
             # Get pending rule
             pending_rule = state_manager.get_pending_rule(workspace)
             if not pending_rule:
-                logger.debug("No pending rule found for terminal sizing")
+                logger.debug("No pending rule found for child window sizing")
                 return False
             
             rule = pending_rule.get('rule', {})
-            if rule.get('type') != 'neovim_terminal':
-                logger.debug("Pending rule is not for neovim terminal")
+            if rule.get('type') != 'child_placement':
+                logger.debug("Pending rule is not for child placement")
                 return False
             
-            # Apply size ratio
+            # Apply size ratio based on direction
+            direction = rule.get('direction', 'below')
             size_ratio = rule.get('size_ratio', 0.333)
-            success = self.set_size(i3_connection, 'v', size_ratio)
+            
+            # Map direction to dimension
+            dimension_map = {
+                'below': 'v',
+                'above': 'v', 
+                'left': 'h',
+                'right': 'h'
+            }
+            dimension = dimension_map.get(direction, 'v')
+            
+            success = self.set_size(i3_connection, dimension, size_ratio)
             
             if success:
-                logger.debug(f"Applied terminal size ratio: {size_ratio}")
+                rule_name = rule.get('name', 'unnamed')
+                logger.debug(f"Applied child window size ratio: {size_ratio} for rule: {rule_name}")
                 
                 # Restore original mode
                 self.restore_original_mode(i3_connection, workspace)
             else:
-                logger.error("Failed to apply terminal size ratio")
+                logger.error("Failed to apply child window size ratio")
             
             return success
             
         except Exception as e:
-            logger.error(f"Error applying terminal sizing: {e}", exc_info=True)
+            logger.error(f"Error applying child window sizing: {e}", exc_info=True)
             return False
     
     def _get_current_mode(self, i3_connection) -> Optional[str]:
