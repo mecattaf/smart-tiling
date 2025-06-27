@@ -17,6 +17,7 @@ jobs:
         id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          skip-labels: 'true'
           config-file: .github/release-please-config.json
           
       - name: Checkout
