@@ -1,6 +1,6 @@
 # Smart-Tiling
 
-Context-aware window tiling for Scroll window manager. Smart-tiling extends the original [autotiling](https://github.com/nwg-piotr/autotiling) with intelligent window placement based on application context and user behavior patterns.
+Context-aware window tiling for [Scroll window manager](https://github.com/dawsers/scroll). Smart-tiling extends the original [autotiling](https://github.com/nwg-piotr/autotiling) with intelligent window placement based on application context and user behavior patterns.
 
 ## Features
 
