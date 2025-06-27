@@ -58,7 +58,7 @@ settings:
 
 ## Original Autotiling History
 
-Based on [autotiling](https://github.com/nwg-piotr/autotiling) by Piotr Miller & Contributors.
+Based on [autotiling](https://github.com/nwg-piotr/autotiling) by Piotr Miller.
 
 ### v1.5 (autotiling master)
 - added `Event.BINDING` subscription [#26](https://github.com/nwg-piotr/autotiling/issues/26) @mtshrmn
