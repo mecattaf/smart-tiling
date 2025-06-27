@@ -116,12 +116,3 @@ smart_tiling/
 ## Attribution
 
 Smart-tiling is built upon the excellent [autotiling](https://github.com/nwg-piotr/autotiling) project by Piotr Miller. The original geometry-based tiling logic is preserved and enhanced with context-aware features.
-
-Original autotiling:
-- Copyright: 2019-2021 Piotr Miller & Contributors
-- License: GPL-3.0-or-later
-- Project: https://github.com/nwg-piotr/autotiling
-
-## License
-
-GPL-3.0-or-later (same as original autotiling)
