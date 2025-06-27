@@ -1,5 +1,7 @@
 {
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "release-type": "python",
+  "skip-labeling": true,
   "packages": {
     ".": {
       "changelog-path": "CHANGELOG.md",
@@ -9,9 +11,7 @@
       "versioning": "default",
       "extra-files": [
         "smart_tiling/__about__.py"
-      ],
-      "skip-labeling": true
+      ]
     }
-  },
-  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json"
+  }
 }
