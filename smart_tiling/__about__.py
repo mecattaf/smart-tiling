@@ -6,4 +6,4 @@ except ImportError:
 try:
     __version__ = metadata.version("smart-tiling")
 except Exception:
-    __version__ = "0.0.0"  # Start at 0.0.0 for new project
+    __version__ = "0.0.1"
