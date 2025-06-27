@@ -44,6 +44,50 @@
 
 * bootstrap releases for path . ([b685b52](https://github.com/mecattaf/smart-tiling/commit/b685b52eb68e20ffa718c3bc349de6259f8fa53f))
 
+## [0.0.1](https://github.com/mecattaf/smart-tiling/compare/v0.0.1...v0.0.1) (2025-06-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* Renamed from autotiling to smart-tiling
+
+### Features
+
+* add manifest for release-please ([b73cae6](https://github.com/mecattaf/smart-tiling/commit/b73cae61dd0e739dbefb9b5744ed0ba0aee95b26))
+* add state management and command building modules ([bf3987a](https://github.com/mecattaf/smart-tiling/commit/bf3987a45f008408b57ac3b9f390de6c7801d788))
+* complete smart-tiling generic rule engine for v0.0.1 ([6bc2089](https://github.com/mecattaf/smart-tiling/commit/6bc2089548de3093d54ea63e28083b4e245bf1da))
+* complete smart-tiling v0.0.1 implementation ([40c5693](https://github.com/mecattaf/smart-tiling/commit/40c56930cb68f319d8a3c273e289f945011ba4bd))
+* implement complete generic app detection system ([6a76963](https://github.com/mecattaf/smart-tiling/commit/6a76963e6f5c1fde3ab0112ab986e58f6312eba8)), closes [#5](https://github.com/mecattaf/smart-tiling/issues/5)
+* implement config schema validation system ([861d9f6](https://github.com/mecattaf/smart-tiling/commit/861d9f64fab086f170d5a9b700919f7e073312e8))
+* implement config schema validation system ([2f30e79](https://github.com/mecattaf/smart-tiling/commit/2f30e79ba60d9e5a8be25f8cac1c503e969d4e04))
+* implement integration testing and prepare 0.0.1 release ([073f728](https://github.com/mecattaf/smart-tiling/commit/073f728c4697516e88cbdb87b0aa224374010d04))
+* implement integration testing and prepare 0.0.1 release ([d1b28fe](https://github.com/mecattaf/smart-tiling/commit/d1b28fe2942ddb0e9daa3470dd81dd970302c5ea))
+* implement rule engine for window matching ([ff7fd4f](https://github.com/mecattaf/smart-tiling/commit/ff7fd4ff8c2ea61a22e4f519163c7c34f453ae3a))
+* implement rule engine for window matching ([9d9dd58](https://github.com/mecattaf/smart-tiling/commit/9d9dd587e0fa8735610e89c78c632e929d3763e9))
+* implement Scroll layout manipulation ([83f30c4](https://github.com/mecattaf/smart-tiling/commit/83f30c42f188902d2efe7ca7b453b2bfc752641e))
+* implement Scroll layout manipulation with comprehensive tests ([54f029d](https://github.com/mecattaf/smart-tiling/commit/54f029d40f546c606c5600d9de4d3e3c714f25b2)), closes [#9](https://github.com/mecattaf/smart-tiling/issues/9)
+* implement YAML config parser for smart-tiling rules ([30b8d9c](https://github.com/mecattaf/smart-tiling/commit/30b8d9c912c6d24f44ba6363a8ed007ba120abf5))
+* implement YAML config parser for smart-tiling rules ([b1c08d4](https://github.com/mecattaf/smart-tiling/commit/b1c08d4b9fa79d3239bb06aae72997b0c3842541)), closes [#6](https://github.com/mecattaf/smart-tiling/issues/6)
+* initial release ([05c0248](https://github.com/mecattaf/smart-tiling/commit/05c024898d1eba41fd9e8881e7dea0e140743c2b))
+* initial smart-tiling structure with core functionality ([7d1a696](https://github.com/mecattaf/smart-tiling/commit/7d1a69672bbfb0eb7240714c78b1f8abf0627d78))
+* no label for release-please ([2e9504e](https://github.com/mecattaf/smart-tiling/commit/2e9504eb046ba7f23a9aa3594064484286d00b71))
+* no label for release-please 3 ([ac832ef](https://github.com/mecattaf/smart-tiling/commit/ac832ef35641232084af1f3b423686981f152ded))
+* no label for release-please 4 ([dc77cdb](https://github.com/mecattaf/smart-tiling/commit/dc77cdb01dd1eef35fec64043b85aeb6aa27eb9d))
+* trigger first release ([0958fc1](https://github.com/mecattaf/smart-tiling/commit/0958fc1aa339d0041fcaf7db936625e2ef8bc574))
+
+
+### Bug Fixes
+
+* cleanup readme ([2ee07eb](https://github.com/mecattaf/smart-tiling/commit/2ee07eb0f63496ec9d4b5e4209fec81605f6a42f))
+* correct author mentioned in setup.cfg ([6f0d1dc](https://github.com/mecattaf/smart-tiling/commit/6f0d1dc234786e910c458e5a9e27715515ed088c))
+* correct release-please config path ([3b7f3ad](https://github.com/mecattaf/smart-tiling/commit/3b7f3ad63af5d95c47687cf896565a487df73d9d))
+* fixes bug introduced in PR where autotiling would not be active if no workspaces were passed ([707e9a5](https://github.com/mecattaf/smart-tiling/commit/707e9a5104f1e3771f8c52ad746cc0975aeafa8c))
+
+
+### Miscellaneous Chores
+
+* bootstrap releases for path . ([b685b52](https://github.com/mecattaf/smart-tiling/commit/b685b52eb68e20ffa718c3bc349de6259f8fa53f))
+
 ## 0.0.1 (2025-06-27)
 
 
